@@ -268,9 +268,9 @@ function App() {
                     href={deviceFlow.verificationUri}
                     target="_blank"
                     rel="noopener noreferrer"
-                  />
+                  >
                     {deviceFlow.verificationUri}
-                 
+                  </a>
                 </p>
                 <p>
                   <strong>Enter this code:</strong>
