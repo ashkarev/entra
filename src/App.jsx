@@ -1,11 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 
-const API_URL = "https://backend-3-qmna.onrender.com" || "http://localhost:5000";
+// ✅ FIXED API URL (env-based)
+const API_URL =
+  import.meta.env.MODE === "development"
+    ? "http://localhost:5000"
+    : "https://backend-3-qmna.onrender.com";
 
 function App() {
   // Device Code Flow State
   const [deviceFlow, setDeviceFlow] = useState({
-    status: "idle", // idle, initiated, pending, success, failed
+    status: "idle",
     flowId: null,
     userCode: null,
     verificationUri: null,
@@ -22,12 +26,9 @@ function App() {
     error: null,
   });
 
-  // Polling reference
   const pollingInterval = useRef(null);
 
-  // =====================================
-  // DEVICE CODE FLOW
-  // =====================================
+  // ================= DEVICE CODE FLOW =================
 
   const startDeviceCodeFlow = async () => {
     try {
@@ -46,9 +47,7 @@ function App() {
         headers: { "Content-Type": "application/json" },
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const data = await response.json();
 
@@ -62,7 +61,6 @@ function App() {
         error: null,
       });
 
-      // Start polling for status
       startPolling(data.flowId);
     } catch (error) {
       setDeviceFlow({
@@ -72,29 +70,23 @@ function App() {
         verificationUri: null,
         message: null,
         account: null,
-        error: error.message,
+        error: error.message || "Something went wrong",
       });
     }
   };
 
   const startPolling = (flowId) => {
-    // Clear any existing polling
-    if (pollingInterval.current) {
-      clearInterval(pollingInterval.current);
-    }
+    if (pollingInterval.current) clearInterval(pollingInterval.current);
 
-    // Poll every 3 seconds
     pollingInterval.current = setInterval(async () => {
       try {
-        const response = await fetch(
+        const res = await fetch(
           `${API_URL}/auth/device-code/status/${flowId}`
         );
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-        const data = await response.json();
+        const data = await res.json();
 
         if (data.status === "success") {
           setDeviceFlow((prev) => ({
@@ -103,7 +95,9 @@ function App() {
             account: data.account,
           }));
           clearInterval(pollingInterval.current);
-        } else if (data.status === "failed") {
+        }
+
+        if (data.status === "failed") {
           setDeviceFlow((prev) => ({
             ...prev,
             status: "failed",
@@ -111,26 +105,21 @@ function App() {
           }));
           clearInterval(pollingInterval.current);
         }
-        // If pending, keep polling
-      } catch (error) {
-        console.error("Polling error:", error);
+      } catch (err) {
+        console.error("Polling error:", err);
       }
     }, 3000);
   };
 
-  // Clean up polling on unmount
   useEffect(() => {
     return () => {
-      if (pollingInterval.current) {
-        clearInterval(pollingInterval.current);
-      }
+      if (pollingInterval.current) clearInterval(pollingInterval.current);
     };
   }, []);
 
   const resetDeviceFlow = () => {
-    if (pollingInterval.current) {
-      clearInterval(pollingInterval.current);
-    }
+    if (pollingInterval.current) clearInterval(pollingInterval.current);
+
     setDeviceFlow({
       status: "idle",
       flowId: null,
@@ -142,17 +131,15 @@ function App() {
     });
   };
 
-  // =====================================
-  // PRT FLOW
-  // =====================================
+  // ================= PRT =================
 
   const loadPRTInfo = async () => {
     try {
-      const response = await fetch(`${API_URL}/auth/prt/info`);
-      const data = await response.json();
+      const res = await fetch(`${API_URL}/auth/prt/info`);
+      const data = await res.json();
       setPrtInfo(data);
-    } catch (error) {
-      console.error("Failed to load PRT info:", error);
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -160,15 +147,15 @@ function App() {
     try {
       setPrtStatus({ status: "loading", account: null, error: null });
 
-      const response = await fetch(`${API_URL}/auth/prt/silent-token`, {
+      const res = await fetch(`${API_URL}/auth/prt/silent-token`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
 
-      const data = await response.json();
+      const data = await res.json();
 
-      if (response.ok) {
+      if (res.ok) {
         setPrtStatus({
           status: "success",
           account: data.account,
@@ -182,11 +169,11 @@ function App() {
           error: data.message || data.error,
         });
       }
-    } catch (error) {
+    } catch (err) {
       setPrtStatus({
         status: "failed",
         account: null,
-        error: error.message,
+        error: err.message,
       });
     }
   };
@@ -195,257 +182,73 @@ function App() {
     setPrtStatus({ status: "idle", account: null, error: null });
   };
 
-  // =====================================
-  // UTILITY
-  // =====================================
-
   const logoutAll = async () => {
     try {
       await fetch(`${API_URL}/auth/logout`, { method: "POST" });
       resetDeviceFlow();
       resetPRTStatus();
-      alert("All accounts logged out ✅");
-    } catch (error) {
-      alert("Logout failed: " + error.message);
+      alert("Logged out ✅");
+    } catch (err) {
+      alert("Logout failed");
     }
   };
 
-  // Load PRT info on mount
   useEffect(() => {
     loadPRTInfo();
   }, []);
 
+  // ================= UI =================
+
   return (
     <div className="container">
-      {/* Header */}
-      <div className="header">
-        <h1>🔐 Azure Entra ID Authentication Demo</h1>
-        <p>
-          Demonstrating Device Code Flow & Primary Refresh Token (PRT) Concepts
-        </p>
-      </div>
+      <h1>Azure Entra ID Authentication</h1>
 
-      {/* Two Column Layout */}
-      <div className="flows-container">
-        {/* LEFT: Device Code Flow */}
-        <div className="flow-card">
-          <h2>Device Code Flow</h2>
+      <button onClick={startDeviceCodeFlow}>Start Login</button>
+
+      {deviceFlow.status === "pending" && (
+        <>
           <p>
-            Authenticate on devices without a browser or keyboard. User
-            completes authentication on a secondary device using a code.
-          </p>
-
-          {deviceFlow.status === "idle" && (
-            <>
-              <button className="button" onClick={startDeviceCodeFlow}>
-                Start Device Code Flow
-              </button>
-              <div className="flow-steps">
-                <h4>How it works:</h4>
-                <ol>
-                  <li>Click "Start Device Code Flow"</li>
-                  <li>You'll receive a unique code</li>
-                  <li>Open the verification URL in a browser</li>
-                  <li>Enter the code and sign in with your Microsoft account</li>
-                  <li>This app will automatically detect completion</li>
-                </ol>
-              </div>
-            </>
-          )}
-
-          {deviceFlow.status === "initiated" && (
-            <div className="status-box pending">
-              <div className="loading">Initiating device code flow</div>
-            </div>
-          )}
-
-          {deviceFlow.status === "pending" && (
-            <>
-              <div className="device-code-display">
-                <p>
-                  <strong>Go to:</strong>{" "}
-                  <a
-                    href={deviceFlow.verificationUri}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {deviceFlow.verificationUri}
-                  </a>
-                </p>
-                <p>
-                  <strong>Enter this code:</strong>
-                </p>
-                <div className="code">{deviceFlow.userCode}</div>
-                <p style={{ fontSize: "0.9em", color: "#666" }}>
-                  Waiting for you to authenticate...
-                </p>
-              </div>
-
-              <div className="status-box pending">
-                <div className="loading">Polling for authentication</div>
-                <p style={{ marginTop: "10px", fontSize: "0.9em" }}>
-                  Complete the authentication in your browser. This page will
-                  update automatically.
-                </p>
-              </div>
-
-              <button className="button secondary" onClick={resetDeviceFlow}>
-                Cancel
-              </button>
-            </>
-          )}
-
-          {deviceFlow.status === "success" && (
-            <>
-              <div className="status-box success">
-                <h3>✅ Authentication Successful!</h3>
-                <div className="account-info">
-                  <h3>Authenticated Account:</h3>
-                  <ul className="info-list">
-                    <li>
-                      <strong>Name:</strong> {deviceFlow.account.name}
-                    </li>
-                    <li>
-                      <strong>Email:</strong> {deviceFlow.account.username}
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <button className="button" onClick={resetDeviceFlow}>
-                Try Again
-              </button>
-            </>
-          )}
-
-          {deviceFlow.status === "failed" && (
-            <>
-              <div className="status-box error">
-                <h3>❌ Authentication Failed</h3>
-                <p>{deviceFlow.error}</p>
-              </div>
-              <button className="button" onClick={resetDeviceFlow}>
-                Try Again
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* RIGHT: PRT Info & Simulation */}
-        <div className="flow-card">
-          <h2>Primary Refresh Token (PRT)</h2>
-          <p>
-            Special token for Windows 10/11 devices enabling seamless SSO
-            across Azure AD-integrated apps without repeated authentication.
-          </p>
-
-          {prtInfo && (
-            <div className="prt-info-section">
-              <h4>📋 About PRT:</h4>
-              <p>{prtInfo.description}</p>
-
-              <h4 style={{ marginTop: "15px" }}>Requirements:</h4>
-              <ul>
-                {prtInfo.requirements.map((req, idx) => (
-                  <li key={idx}>{req}</li>
-                ))}
-              </ul>
-
-              <div
-                style={{
-                  background: "#fff3cd",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  marginTop: "15px",
-                  border: "1px solid #ffc107",
-                }}
-              >
-                <strong>⚠️ Note:</strong> {prtInfo.note}
-              </div>
-
-              <h4 style={{ marginTop: "15px" }}>Reference Flow:</h4>
-              <ol>
-                <li>{prtInfo.referenceFlow.step1}</li>
-                <li>{prtInfo.referenceFlow.step2}</li>
-                <li>{prtInfo.referenceFlow.step3}</li>
-                <li>{prtInfo.referenceFlow.step4}</li>
-              </ol>
-            </div>
-          )}
-
-          <div style={{ marginTop: "20px" }}>
-            <button
-              className="button"
-              onClick={simulatePRTAuth}
-              disabled={prtStatus.status === "loading"}
+            Go to{" "}
+            <a
+              href={deviceFlow.verificationUri}
+              target="_blank"
+              rel="noreferrer"
             >
-              {prtStatus.status === "loading"
-                ? "Simulating..."
-                : "Simulate PRT Silent Auth"}
-            </button>
+              {deviceFlow.verificationUri}
+            </a>
+          </p>
+          <h2>{deviceFlow.userCode}</h2>
+        </>
+      )}
 
-            {prtStatus.status === "success" && (
-              <div className="status-box success">
-                <h3>✅ Silent Authentication Successful</h3>
-                <p style={{ fontSize: "0.9em", marginBottom: "10px" }}>
-                  {prtStatus.message}
-                </p>
-                <div className="account-info">
-                  <h3>Account:</h3>
-                  <ul className="info-list">
-                    <li>
-                      <strong>Name:</strong> {prtStatus.account.name}
-                    </li>
-                    <li>
-                      <strong>Email:</strong> {prtStatus.account.username}
-                    </li>
-                  </ul>
-                </div>
-                <button
-                  className="button secondary"
-                  style={{ marginTop: "10px" }}
-                  onClick={resetPRTStatus}
-                >
-                  Reset
-                </button>
-              </div>
-            )}
-
-            {prtStatus.status === "failed" && (
-              <div className="status-box error">
-                <h3>❌ Silent Authentication Failed</h3>
-                <p>{prtStatus.error}</p>
-                <p style={{ fontSize: "0.9em", marginTop: "10px" }}>
-                  💡 You need to authenticate first using Device Code Flow to
-                  cache credentials.
-                </p>
-                <button
-                  className="button secondary"
-                  style={{ marginTop: "10px" }}
-                  onClick={resetPRTStatus}
-                >
-                  Reset
-                </button>
-              </div>
-            )}
-          </div>
+      {deviceFlow.status === "success" && (
+        <div>
+          <h3>Success</h3>
+          <p>{deviceFlow.account?.username}</p>
         </div>
-      </div>
+      )}
 
-      {/* Utility Section */}
-      <div className="flow-card">
-        <h2>⚙️ Utilities</h2>
-        <button className="button secondary" onClick={logoutAll}>
-          Clear All Cached Tokens
-        </button>
-      </div>
+      {deviceFlow.status === "failed" && (
+        <div>
+          <h3>Failed</h3>
+          <p>{deviceFlow.error || "Try again"}</p>
+          <button onClick={resetDeviceFlow}>Try Again</button>
+        </div>
+      )}
 
-      {/* Footer */}
-      <div className="footer">
-        <p>
-          Built with React + Vite | Backend: Node.js + @azure/msal-node
-        </p>
-        <p>Azure Entra ID Authentication Demo for Freelance Project</p>
-      </div>
+      <hr />
+
+      <button onClick={simulatePRTAuth}>PRT Auth</button>
+
+      {prtStatus.status === "success" && (
+        <p>{prtStatus.account?.username}</p>
+      )}
+
+      {prtStatus.status === "failed" && (
+        <p>{prtStatus.error}</p>
+      )}
+
+      <button onClick={logoutAll}>Logout</button>
     </div>
   );
 }
