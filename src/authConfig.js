@@ -1,20 +1,34 @@
 import { LogLevel } from "@azure/msal-browser";
 
 /**
+ * DEBUG: Validate environment variables at runtime
+ */
+console.log("--- MSAL Config Initialization ---");
+console.log("VITE_CLIENT_ID:", import.meta.env.VITE_CLIENT_ID ? "Found" : "MISSING (Check Vercel Env Vars)");
+console.log("VITE_TENANT_ID:", import.meta.env.VITE_TENANT_ID || "common");
+console.log("VITE_REDIRECT_URI:", import.meta.env.VITE_REDIRECT_URI || "Using window.location.origin");
+
+const CLIENT_ID = import.meta.env.VITE_CLIENT_ID;
+if (!CLIENT_ID || CLIENT_ID === "undefined") {
+    console.error("CRITICAL ERROR: VITE_CLIENT_ID is undefined. Microsoft login WILL fail.");
+}
+
+/**
  * Configuration object to be passed to MSAL instance on creation. 
- * For a full list of MSAL.js configuration parameters, visit:
- * https://github.com/AzureAD/microsoft-authentication-library-for-js/blob/dev/lib/msal-browser/docs/configuration.md 
  */
 export const msalConfig = {
     auth: {
-        clientId: import.meta.env.VITE_CLIENT_ID, // Must be your Application (client) ID
+        clientId: CLIENT_ID, 
         authority: `https://login.microsoftonline.com/${import.meta.env.VITE_TENANT_ID || 'common'}`,
-        redirectUri: import.meta.env.VITE_REDIRECT_URI || window.location.origin, // Must match your Azure Portal Redirect URI
+        // Fix: Ensure redirect URI matches exactly what is in Azure Portal
+        // Common issue: https://site.com vs https://site.com/
+        redirectUri: import.meta.env.VITE_REDIRECT_URI || window.location.origin,
         postLogoutRedirectUri: "/",
+        navigateToLoginRequestUrl: true,
     },
     cache: {
         cacheLocation: "localStorage", // This ensures persistence across tabs and reloads
-        storeAuthStateInCookie: true, // Recommended to set to true for better performance on Safari
+        storeAuthStateInCookie: true, // Required for Safari and cross-site issues
     },
     system: {
         loggerOptions: {
@@ -22,16 +36,16 @@ export const msalConfig = {
                 if (containsPii) return;
                 switch (level) {
                     case LogLevel.Error:
-                        console.error(message);
+                        console.error("[MSAL Error]:", message);
                         return;
                     case LogLevel.Info:
-                        console.info(message);
+                        console.info("[MSAL Info]:", message);
                         return;
                     case LogLevel.Verbose:
-                        console.debug(message);
+                        console.debug("[MSAL Verbose]:", message);
                         return;
                     case LogLevel.Warning:
-                        console.warn(message);
+                        console.warn("[MSAL Warning]:", message);
                         return;
                     default:
                         return;
@@ -43,7 +57,6 @@ export const msalConfig = {
 
 /**
  * Scopes you add here will be prompted for user consent during sign-in.
- * By default, MSAL.js will add OIDC scopes (openid, profile, email) to any login request.
  */
 export const loginRequest = {
     scopes: ["User.Read", "offline_access"]
